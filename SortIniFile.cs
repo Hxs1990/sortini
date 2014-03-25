@@ -163,11 +163,33 @@ namespace IniFileSorter
                 ini.Sort();
 
                 // OUTPUT
-                if (outfile != null && outfile.Length > 0) {
-                    if (!ini.Save(outfile)) {
-                        throw new InvalidOperationException("Failed saving to outfile");
+                if (!StdInEx.IsOutputRedirected && (outfile == null || outfile.Length == 0)) {
+                    // Write back to the input file..
+                    if (!ini.Save()) {
+                        throw new InvalidOperationException("Failed saving back to file");
+                    }
+                } else {
+                    if (outfile != null && outfile.Length > 0) {
+                        if (!ini.Save(outfile)) {
+                            throw new InvalidOperationException("Failed saving to outfile");
+                        }
+                    }
+                    if (StdInEx.IsOutputRedirected) {
+                        string tmpOut;
+                        DeleteFileWhenDone tmpDel;
+                        if (outfile != null && outfile.Length > 0) {
+                            tmpOut = outfile; // just output the new file..
+                        } else {
+                            tmpOut = Path.GetTempFileName();
+                            tmpDel = new DeleteFileWhenDone(tmpOut);
+                            if (!ini.Save(tmpOut)) {
+                                throw new InvalidOperationException("Failed saving to temporary output (for stdout)");
+                            }
+                        }
+                        Console.WriteLine(File.ReadAllText(tmpOut));
                     }
                 }
+
             } catch (Exception ex) {
                 StringBuilder s = new StringBuilder();
                 s.AppendLine("**** ERROR OCURRED")
@@ -178,21 +200,6 @@ namespace IniFileSorter
                     File.WriteAllText(outfile, s.ToString());
                 }
                 return 1;
-            }
-
-            if (StdInEx.IsOutputRedirected) {
-                string tmpOut;
-                DeleteFileWhenDone tmpDel;
-                if (outfile != null && outfile.Length > 0) {
-                    tmpOut = outfile; // just output the new file..
-                } else {
-                    tmpOut = Path.GetTempFileName();
-                    tmpDel = new DeleteFileWhenDone(tmpOut);
-                    if (!ini.Save(tmpOut)) {
-                        throw new InvalidOperationException("Failed saving to temporary output (for stdout)");
-                    }
-                }
-                Console.WriteLine(File.ReadAllText(tmpOut));
             }
 
             if (!quiet) {

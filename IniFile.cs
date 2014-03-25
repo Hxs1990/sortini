@@ -329,15 +329,9 @@ namespace Bricksoft.PowerCode
         {
             if (SectionsSortOption != SortOption.None) {
                 if (SectionsSortOption == SortOption.Ascending) {
-                    Sections.Sort(delegate( IniSection a, IniSection b )
-                    {
-                        return string.Compare(a.Name, b.Name, SectionsStringComparison);
-                    });
+                    Sections.Sort(SortSectionsDelegate);
                 } else {
-                    Sections.Sort(delegate( IniSection a, IniSection b )
-                    {
-                        return string.Compare(b.Name, a.Name, SectionsStringComparison);
-                    });
+                    Sections.Sort(SortSectionsDelegateRev);
                 }
             }
 
@@ -354,22 +348,102 @@ namespace Bricksoft.PowerCode
             }
         }
 
+        private int SortDelegate( string a, string b, StringComparison StringComparison )
+        {
+            int i;
+            Decimal al, bl;
+
+            // First, try a normal compare using the whole string..
+            i = string.Compare(a, b, StringComparison);
+
+            // If it isn't a perfect match, try natural sort comparison (if enabled)..
+            if (i != 0 && NaturalSort) {
+                // Try the whole string as a number..
+                if (Decimal.TryParse(a, out al) && Decimal.TryParse(b, out bl)) {
+                    i = al.CompareTo(bl);
+                } else {
+                    // Split the string into parts, based on data type..
+                    i = string.Compare(a, b, StringComparison);
+                    if (i != 0) {
+                        string aa, bb;
+                        GetTrailingDigits(a, out aa, out al);
+                        GetTrailingDigits(b, out bb, out bl);
+                        i = string.Compare(aa, bb, StringComparison);
+                        if (i == 0) {
+                            i = al.CompareTo(bl);
+                        }
+                    }
+                }
+            }
+
+            return i;
+        }
+
+        private bool GetTrailingDigits( string s, out string ss, out Decimal sl )
+        {
+            StringBuilder lb = new StringBuilder();
+            bool done = false;
+            bool neg = false,
+                hasdot = false;
+
+            ss = "";
+
+            for (int i = s.Length - 1; i >= 0; i--) {
+                char c = s[i];
+
+                if (Char.IsDigit(c)) {
+                    lb.Insert(0, c);
+                } else if (lb.Length > 0 && c == '.') {
+                    if (hasdot) {
+                        done = true;
+                    } else {
+                        hasdot = true;
+                        lb.Insert(0, c);
+                    }
+                } else if (lb.Length > 0 && (c == '+' || c == '-')) {
+                    if (c == '-') {
+                        neg = true;
+                    }
+                    done = true;
+                } else {
+                    done = true;
+                }
+
+                if (done) {
+                    ss = s.Substring(0, i + 1);
+                    break;
+                }
+            }
+
+            if (!Decimal.TryParse(lb.ToString(), out sl)) {
+                sl = 0;
+                return false;
+            }
+
+            if (neg && sl > 0) {
+                sl = sl * -1;
+            }
+
+            return true;
+        }
+
+        private int SortSectionsDelegate( IniSection a, IniSection b )
+        {
+            return SortDelegate(a.Name, b.Name, SectionsStringComparison);
+        }
+
+        private int SortSectionsDelegateRev( IniSection a, IniSection b )
+        {
+            return SortSectionsDelegate(b, a);
+        }
+
         private int SortEntriesDelegate( IniEntry a, IniEntry b )
         {
             int i;
-            long al, bl;
 
-            if (NaturalSort && long.TryParse(a.Name, out al) && long.TryParse(b.Name, out bl)) {
-                i = al.CompareTo(bl);
-            } else {
-                i = string.Compare(a.Name, b.Name, EntriesStringComparison);
-            }
+            i = SortDelegate(a.Name, b.Name, EntriesStringComparison);
             if (i == 0) {
-                if (NaturalSort && long.TryParse(a.Value, out al) && long.TryParse(b.Value, out bl)) {
-                    i = al.CompareTo(bl);
-                } else {
-                    i = string.Compare(a.Value, b.Value, EntriesStringComparison);
-                }
+                i = SortDelegate(a.Value, b.Value, EntriesStringComparison);
             }
 
             return i;
